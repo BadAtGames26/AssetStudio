@@ -20,7 +20,7 @@ namespace AssetStudio
         internal Dictionary<string, int> assetsFileIndexCache = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         internal ConcurrentDictionary<string, BinaryReader> resourceFileReaders = new ConcurrentDictionary<string, BinaryReader>(StringComparer.OrdinalIgnoreCase);
 
-        private UnityVersion specifiedUnityVersion;
+        private UnityVersion specifiedUnityVersion = new UnityVersion("2020.3.18f1");
         private List<string> importFiles = new List<string>();
         private HashSet<ClassIDType> filteredAssetTypesList = new HashSet<ClassIDType>();
         private HashSet<string> importFilesHash = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -29,7 +29,17 @@ namespace AssetStudio
 
         public UnityVersion SpecifyUnityVersion
         {
-            get => specifiedUnityVersion;
+            get
+            {
+                if (specifiedUnityVersion != null)
+                {
+                    return specifiedUnityVersion;
+                }
+                else
+                {
+                    return new UnityVersion("2020.3.18f1");
+                }
+            }
             set
             {
                 if (specifiedUnityVersion == value)
