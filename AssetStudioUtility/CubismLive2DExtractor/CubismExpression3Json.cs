@@ -1,24 +1,17 @@
 ﻿namespace CubismLive2DExtractor
 {
-    public enum BlendType
-    {
-        Add,
-        Multiply,
-        Overwrite,
-    }
-
     public class CubismExpression3Json
     {
-        public string Type;
-        public float FadeInTime;
-        public float FadeOutTime;
-        public SerializableExpressionParameter[] Parameters;
+        public string Type { get; set; }
+        public float FadeInTime { get; set; }
+        public float FadeOutTime { get; set; }
+        public SerializableExpressionParameter[] Parameters { get; set; }
 
         public class SerializableExpressionParameter
         {
-            public string Id;
-            public float Value;
-            public BlendType Blend;
+            public string Id { get; set; }
+            public float Value { get; set; }
+            public BlendType Blend { get; set; }
         }
     }
 }

@@ -140,26 +140,40 @@ namespace AssetStudioCLI
 
         private static void ExportFbx(IImported convert, string exportPath)
         {
-            var eulerFilter = true;
-            var filterPrecision = 0.25f;
-            var exportAllNodes = true;
-            var exportSkins = true;
-            var exportAnimations = true;
-            var exportBlendShape = true;
-            var castToBone = false;
-            var boneSize = CLIOptions.o_fbxBoneSize.Value;
-            var exportAllUvsAsDiffuseMaps = false;
-            var scaleFactor = CLIOptions.o_fbxScaleFactor.Value;
-            var fbxVersion = 3;
-            var fbxFormat = 0;
-            ModelExporter.ExportFbx(exportPath, convert, eulerFilter, filterPrecision,
-                exportAllNodes, exportSkins, exportAnimations, exportBlendShape, castToBone, boneSize, exportAllUvsAsDiffuseMaps, scaleFactor, fbxVersion, fbxFormat == 1);
+            var fbxSettings = new Fbx.Settings
+            {
+                BoneSize = CLIOptions.o_fbxBoneSize.Value,
+                ScaleFactor = CLIOptions.o_fbxScaleFactor.Value,
+                ExportAllUvsAsDiffuseMaps = CLIOptions.f_fbxUvsAsDiffuseMaps.Value,
+            };
+            ModelExporter.ExportFbx(exportPath, convert, fbxSettings);
         }
 
         public static bool ExportRawFile(AssetItem item, string exportPath)
         {
             if (!TryExportFile(exportPath, item, ".dat", out var exportFullPath, mode: "ExportRaw"))
                 return false;
+            switch (item.Asset)
+            {
+                case Texture2D m_Texture2D:
+                    if (!string.IsNullOrEmpty(m_Texture2D.m_StreamData?.path))
+                    {
+                        m_Texture2D.image_data.WriteData(exportFullPath.Replace(".dat", "_data.dat"));
+                    }
+                    break;
+                case AudioClip m_AudioClip:
+                    if (!string.IsNullOrEmpty(m_AudioClip.m_Source))
+                    {
+                        m_AudioClip.m_AudioData.WriteData(exportFullPath.Replace(".dat", "_data.dat"));
+                    }
+                    break;
+                case VideoClip m_VideoClip:
+                    if (!string.IsNullOrEmpty(m_VideoClip.m_ExternalResources.m_Source))
+                    {
+                        m_VideoClip.m_VideoData.WriteData(exportFullPath.Replace(".dat", "_data.dat"));
+                    }
+                    break;
+            }
             File.WriteAllBytes(exportFullPath, item.Asset.GetRawData());
 
             Logger.Debug($"{item.TypeString} \"{item.Text}\" exported to \"{exportFullPath}\"");

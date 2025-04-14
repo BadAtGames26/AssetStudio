@@ -187,6 +187,27 @@ namespace AssetStudioGUI
         {
             if (!TryExportFile(exportPath, item, ".dat", out var exportFullPath, mode: "ExportRaw"))
                 return false;
+            switch (item.Asset)
+            {
+                case Texture2D m_Texture2D:
+                    if (!string.IsNullOrEmpty(m_Texture2D.m_StreamData?.path))
+                    {
+                        m_Texture2D.image_data.WriteData(exportFullPath.Replace(".dat", "_data.dat"));
+                    }
+                    break;
+                case AudioClip m_AudioClip:
+                    if (!string.IsNullOrEmpty(m_AudioClip.m_Source))
+                    {
+                        m_AudioClip.m_AudioData.WriteData(exportFullPath.Replace(".dat", "_data.dat"));
+                    }
+                    break;
+                case VideoClip m_VideoClip:
+                    if (!string.IsNullOrEmpty(m_VideoClip.m_ExternalResources.m_Source))
+                    {
+                        m_VideoClip.m_VideoData.WriteData(exportFullPath.Replace(".dat", "_data.dat"));
+                    }
+                    break;
+            }
             File.WriteAllBytes(exportFullPath, item.Asset.GetRawData());
             return true;
         }
@@ -258,20 +279,8 @@ namespace AssetStudioGUI
 
         private static void ExportFbx(IImported convert, string exportPath)
         {
-            var eulerFilter = Properties.Settings.Default.eulerFilter;
-            var filterPrecision = (float)Properties.Settings.Default.filterPrecision;
-            var exportAllNodes = Properties.Settings.Default.exportAllNodes;
-            var exportSkins = Properties.Settings.Default.exportSkins;
-            var exportAnimations = Properties.Settings.Default.exportAnimations;
-            var exportBlendShape = Properties.Settings.Default.exportBlendShape;
-            var castToBone = Properties.Settings.Default.castToBone;
-            var boneSize = (int)Properties.Settings.Default.boneSize;
-            var exportAllUvsAsDiffuseMaps = Properties.Settings.Default.exportAllUvsAsDiffuseMaps;
-            var scaleFactor = (float)Properties.Settings.Default.scaleFactor;
-            var fbxVersion = Properties.Settings.Default.fbxVersion;
-            var fbxFormat = Properties.Settings.Default.fbxFormat;
-            ModelExporter.ExportFbx(exportPath, convert, eulerFilter, filterPrecision,
-                exportAllNodes, exportSkins, exportAnimations, exportBlendShape, castToBone, boneSize, exportAllUvsAsDiffuseMaps, scaleFactor, fbxVersion, fbxFormat == 1);
+            var fbxSettings = Fbx.Settings.FromBase64(Properties.Settings.Default.fbxSettings);
+            ModelExporter.ExportFbx(exportPath, convert, fbxSettings);
         }
 
         public static bool ExportDumpFile(AssetItem item, string exportPath)

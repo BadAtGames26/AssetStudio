@@ -20,6 +20,7 @@ namespace AssetStudioCLI.Options
 
     internal enum WorkMode
     {
+        Extract,
         Export,
         ExportRaw,
         Dump,
@@ -100,11 +101,14 @@ namespace AssetStudioCLI.Options
         public static Option<ImageFormat> o_imageFormat;
         public static Option<AudioFormat> o_audioFormat;
         //live2d
+        public static Option<CubismLive2DExtractor.Live2DModelGroupOption> o_l2dGroupOption;
+        public static Option<bool> f_l2dAssetSearchByFilename;
         public static Option<CubismLive2DExtractor.Live2DMotionMode> o_l2dMotionMode;
         public static Option<bool> f_l2dForceBezier;
         //fbx
         public static Option<float> o_fbxScaleFactor;
         public static Option<int> o_fbxBoneSize;
+        public static Option<bool> f_fbxUvsAsDiffuseMaps;
         //filter
         public static Option<List<string>> o_filterByName;
         public static Option<List<string>> o_filterByContainer;
@@ -133,8 +137,8 @@ namespace AssetStudioCLI.Options
                 return;
             }
 
-            var optionDesc = desc + example.Color(ColorConsole.BrightBlack);
-            var optionDict = new Dictionary<string, string>() { { name, optionDesc } };
+            var optionDesc = desc + example.Color(ColorConsole.BrightCyan);
+            var optionDict = new Dictionary<string, string> { { name, optionDesc } };
             if (optionGroups.TryGetValue(helpGroup, out Dictionary<string, string> groupDict))
             {
                 groupDict.Add(name, optionDesc);
@@ -186,7 +190,8 @@ namespace AssetStudioCLI.Options
                 optionDefaultValue: WorkMode.Export,
                 optionName: "-m, --mode <value>",
                 optionDescription: "Specify working mode\n" +
-                    "<Value: export(default) | exportRaw | dump | info | live2d | splitObjects>\n" +
+                    "<Value: extract | export(default) | exportRaw | dump | info | live2d | splitObjects>\n" +
+                    "Extract - Extracts(Decompresses) asset bundles\n" +
                     "Export - Exports converted assets\n" +
                     "ExportRaw - Exports raw data\n" +
                     "Dump - Makes asset dumps\n" +
@@ -213,13 +218,13 @@ namespace AssetStudioCLI.Options
                 optionDefaultValue: AssetGroupOption.ContainerPath,
                 optionName: "-g, --group-option <value>",
                 optionDescription: "Specify the way in which exported assets should be grouped\n" +
-                    "<Value: none | type | container(default) | containerFull | filename | sceneHierarchy>\n" +
+                    "<Value: none | type | container(default) | containerFull | fileName | sceneHierarchy>\n" +
                     "None - Do not group exported assets\n" +
                     "Type - Group exported assets by type name\n" +
                     "Container - Group exported assets by container path\n" +
                     "ContainerFull - Group exported assets by full container path (e.g. with prefab name)\n" +
                     "SceneHierarchy - Group exported assets by their node path in scene hierarchy\n" +
-                    "Filename - Group exported assets by source file name\n",
+                    "FileName - Group exported assets by source file name\n",
                 optionExample: "Example: \"-g containerFull\"\n",
                 optionHelpGroup: HelpGroups.General
             );
@@ -228,10 +233,10 @@ namespace AssetStudioCLI.Options
                 optionDefaultValue: FilenameFormat.AssetName,
                 optionName: "-f, --filename-format <value>",
                 optionDescription: "Specify the file name format for exported assets\n" +
-                                   "<Value: assetName(default) | assetName_pathID | pathID>\n" +
-                                   "AssetName - Asset file names will look like \"assetName.extension\"\n" +
-                                   "AssetName_pathID - Asset file names will look like \"assetName @pathID.extension\"\n" +
-                                   "PathID - Asset file names will look like \"pathID.extension\"\n",
+                    "<Value: assetName(default) | assetName_pathID | pathID>\n" +
+                    "AssetName - Asset file names will look like \"assetName.extension\"\n" +
+                    "AssetName_pathID - Asset file names will look like \"assetName @pathID.extension\"\n" +
+                    "PathID - Asset file names will look like \"pathID.extension\"\n",
                 optionExample: "Example: \"-f assetName_pathID\"\n",
                 optionHelpGroup: HelpGroups.General
             );
@@ -293,13 +298,25 @@ namespace AssetStudioCLI.Options
                 optionName: "--audio-format <value>",
                 optionDescription: "Specify the format for converting FMOD audio assets\n" +
                     "<Value: none | wav(default)>\n" +
-                    "None - Do not convert fmod audios and export them in their own format\n",
+                    "None - Do not convert FMOD audios and export them in their own format\n",
                 optionExample: "Example: \"--audio-format wav\"",
                 optionHelpGroup: HelpGroups.Convert
             );
             #endregion
 
             #region Init Cubism Live2D Options
+            o_l2dGroupOption = new GroupedOption<CubismLive2DExtractor.Live2DModelGroupOption>
+            (
+                optionDefaultValue: CubismLive2DExtractor.Live2DModelGroupOption.ContainerPath,
+                optionName: "--l2d-group-option <value>",
+                optionDescription: "Specify the way in which exported models should be grouped\n" +
+                    "<Value: container(default) | fileName | modelName>\n" +
+                    "Container - Group exported models by container path\n" +
+                    "FileName - Group exported models by source file name\n" +
+                    "ModelName - Group exported models by model name\n",
+                optionExample: "Example: \"--l2d-group-option modelName\"\n",
+                optionHelpGroup: HelpGroups.Live2D
+            );
             o_l2dMotionMode = new GroupedOption<CubismLive2DExtractor.Live2DMotionMode>
             (
                 optionDefaultValue: CubismLive2DExtractor.Live2DMotionMode.MonoBehaviour,
@@ -311,6 +328,18 @@ namespace AssetStudioCLI.Options
                     "AnimationClip - Try to export motions using AnimationClip assets\n",
                 optionExample: "Example: \"--l2d-motion-mode animationClip\"\n",
                 optionHelpGroup: HelpGroups.Live2D
+            );
+            f_l2dAssetSearchByFilename = new GroupedOption<bool>
+            (
+                optionDefaultValue: false,
+                optionName: "--l2d-search-by-filename",
+                optionDescription: "(Flag) If specified, Studio will search for model-related Live2D assets by file name\n" + 
+                    "rather than by container\n" +
+                    "(Preferred option if all l2d assets of a single model are stored in a single file\n" + 
+                    "or containers are obfuscated)\n",
+                optionExample: "",
+                optionHelpGroup: HelpGroups.Live2D,
+                isFlag: true
             );
             f_l2dForceBezier = new GroupedOption<bool>
             (
@@ -340,7 +369,17 @@ namespace AssetStudioCLI.Options
                 optionName: "--fbx-bone-size <value>",
                 optionDescription: "Specify the FBX Bone Size\n" +
                     "<Value: integer number from 0 to 100 (default=10)>\n",
-                optionExample: "Example: \"--fbx-bone-size 10\"",
+                optionExample: "Example: \"--fbx-bone-size 10\"\n",
+                optionHelpGroup: HelpGroups.FBX
+            );
+            f_fbxUvsAsDiffuseMaps = new GroupedOption<bool>
+            (
+                optionDefaultValue: false,
+                optionName: "--fbx-uvs-as-diffuse",
+                optionDescription: "(Flag) If specified, Studio will export all UVs as Diffuse maps.\n" +
+                    "Сan be useful if you cannot find some UVs after exporting (e.g. in Blender)\n" +
+                    "(But can also cause some bugs with UVs)",
+                optionExample: "",
                 optionHelpGroup: HelpGroups.FBX
             );
             #endregion
@@ -380,7 +419,7 @@ namespace AssetStudioCLI.Options
                 optionDescription: "Specify the text by which assets should be filtered\n" +
                     "Looks for assets that contain the specified text in their names or containers\n" +
                     "*To specify multiple values write them separated by ',' or ';' without spaces\n",
-                optionExample: "Example: \"--filter-by-text portrait\" or \"--filter-by-text portrait,art\"\n",
+                optionExample: "Example: \"--filter-by-text portrait\" or \"--filter-by-text portrait,art\"",
                 optionHelpGroup: HelpGroups.Filter
             );
             #endregion
@@ -525,6 +564,9 @@ namespace AssetStudioCLI.Options
                 var value = resplittedArgs[workModeOptionIndex + 1];
                 switch (value.ToLower())
                 {
+                    case "extract":
+                        o_workMode.Value = WorkMode.Extract;
+                        break;
                     case "export":
                         o_workMode.Value = WorkMode.Export;
                         break;
@@ -541,22 +583,24 @@ namespace AssetStudioCLI.Options
                     case "l2d":
                     case "live2d":
                         o_workMode.Value = WorkMode.Live2D;
-                        o_exportAssetTypes.Value = new List<ClassIDType>()
+                        o_exportAssetTypes.Value = new List<ClassIDType>
                         {
                             ClassIDType.AnimationClip,
+                            ClassIDType.Animator,
                             ClassIDType.MonoBehaviour,
                             ClassIDType.Texture2D,
                         };
                         break;
                     case "splitobjects":
                         o_workMode.Value = WorkMode.SplitObjects;
-                        o_exportAssetTypes.Value = new List<ClassIDType>()
+                        o_exportAssetTypes.Value = new List<ClassIDType>
                         {
                             ClassIDType.Texture2D,
                             ClassIDType.Material,
                             ClassIDType.Mesh,
                             ClassIDType.MeshRenderer,
                             ClassIDType.MeshFilter,
+                            ClassIDType.SkinnedMeshRenderer,
                         };
                         break;
                     default:
@@ -569,12 +613,22 @@ namespace AssetStudioCLI.Options
             #endregion
 
             #region Parse Flags
-            for (int i = 0; i < resplittedArgs.Count; i++) 
+            for (var i = 0; i < resplittedArgs.Count; i++) 
             {
-                string flag = resplittedArgs[i].ToLower();
+                var flag = resplittedArgs[i].ToLower();
 
                 switch(flag)
                 {
+                    case "--l2d-search-by-filename":
+                        if (o_workMode.Value != WorkMode.Live2D)
+                        {
+                            Console.WriteLine($"{"Error".Color(brightRed)} during parsing [{flag.Color(brightYellow)}] flag. This flag is not suitable for the current working mode [{o_workMode.Value}].\n");
+                            ShowOptionDescription(o_workMode);
+                            return;
+                        }
+                        f_l2dAssetSearchByFilename.Value = true;
+                        resplittedArgs.RemoveAt(i);
+                        break;
                     case "--l2d-force-bezier":
                         if (o_workMode.Value != WorkMode.Live2D)
                         {
@@ -583,6 +637,16 @@ namespace AssetStudioCLI.Options
                             return;
                         }
                         f_l2dForceBezier.Value = true;
+                        resplittedArgs.RemoveAt(i);
+                        break;
+                    case "--fbx-uvs-as-diffuse":
+                        if (o_workMode.Value != WorkMode.SplitObjects)
+                        {
+                            Console.WriteLine($"{"Error".Color(brightRed)} during parsing [{flag.Color(brightYellow)}] flag. This flag is not suitable for the current working mode [{o_workMode.Value}].\n");
+                            ShowOptionDescription(o_workMode);
+                            return;
+                        }
+                        f_fbxUvsAsDiffuseMaps.Value = true;
                         resplittedArgs.RemoveAt(i);
                         break;
                     case "--not-restore-extension":
@@ -613,7 +677,7 @@ namespace AssetStudioCLI.Options
             #endregion
 
             #region Parse Options
-            for (int i = 0; i < resplittedArgs.Count; i++)
+            for (var i = 0; i < resplittedArgs.Count; i++)
             {
                 var option = resplittedArgs[i].ToLower();
                 try
@@ -831,6 +895,30 @@ namespace AssetStudioCLI.Options
                                     return;
                             }
                             break;
+                        case "--l2d-group-option":
+                            if (o_workMode.Value != WorkMode.Live2D)
+                            {
+                                Console.WriteLine($"{"Error".Color(brightRed)} during parsing [{option.Color(brightYellow)}] option. This option is not suitable for the current working mode [{o_workMode.Value}].\n");
+                                ShowOptionDescription(o_workMode);
+                                return;
+                            }
+                            switch (value.ToLower())
+                            {
+                                case "container":
+                                    o_l2dGroupOption.Value = CubismLive2DExtractor.Live2DModelGroupOption.ContainerPath;
+                                    break;
+                                case "filename":
+                                    o_l2dGroupOption.Value = CubismLive2DExtractor.Live2DModelGroupOption.SourceFileName;
+                                    break;
+                                case "modelname":
+                                    o_l2dGroupOption.Value = CubismLive2DExtractor.Live2DModelGroupOption.ModelName;
+                                    break;
+                                default:
+                                    Console.WriteLine($"{"Error".Color(brightRed)} during parsing [{option.Color(brightYellow)}] option. Unsupported model grouping option: [{value.Color(brightRed)}].\n");
+                                    ShowOptionDescription(o_l2dGroupOption);
+                                    return;
+                            }
+                            break;
                         case "--l2d-motion-mode":
                             if (o_workMode.Value != WorkMode.Live2D)
                             {
@@ -1024,7 +1112,10 @@ namespace AssetStudioCLI.Options
             }
             if (o_outputFolder.Value == o_outputFolder.DefaultValue)
             {
-                var fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, o_outputFolder.DefaultValue + Path.DirectorySeparatorChar);
+                var defaultFolder = o_workMode.Value == WorkMode.Extract
+                    ? "ASExtract"
+                    : o_outputFolder.DefaultValue;
+                var fullPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, defaultFolder + Path.DirectorySeparatorChar);
                 if (!Directory.Exists(fullPath))
                 {
                     Directory.CreateDirectory(fullPath);
@@ -1043,7 +1134,7 @@ namespace AssetStudioCLI.Options
         private static void ShowOptionDescription<T>(Option<T> option, bool isFlag = false)
         {
             var arg = isFlag ? "Flag" : "Option";
-            var optionDesc = option.Description + option.Example.Color(ColorConsole.BrightBlack);
+            var optionDesc = option.Description + option.Example.Color(ColorConsole.BrightCyan);
             Console.WriteLine($"{arg} description:\n{optionDesc}");
         }
 
@@ -1138,6 +1229,9 @@ namespace AssetStudioCLI.Options
 
         public static void ShowCurrentOptions()
         {
+            var unityVer = o_unityVersion.Value?.ToString();
+            unityVer = string.IsNullOrEmpty(unityVer) ? "ReadFromAsset" : unityVer;
+            
             var sb = new StringBuilder();
             sb.AppendLine("[Current Options]");
             sb.AppendLine($"# Working Mode: {o_workMode}");
@@ -1145,14 +1239,20 @@ namespace AssetStudioCLI.Options
             {
                 sb.AppendLine($"# Custom Compression Type: {o_customCompressionType}");
             }
-            sb.AppendLine($"# Parse Assets Using TypeTree: {!f_avoidLoadingViaTypetree.Value}");
+            if (o_workMode.Value != WorkMode.Extract)
+            {
+                sb.AppendLine($"# Parse Assets Using TypeTree: {!f_avoidLoadingViaTypetree.Value}");
+            }
             sb.AppendLine($"# Input Path: \"{inputPath}\"");
+            if (o_workMode.Value != WorkMode.Info)
+            {
+                sb.AppendLine($"# Output Path: \"{o_outputFolder}\"");
+            }
             switch (o_workMode.Value)
             {
                 case WorkMode.Export:
                 case WorkMode.ExportRaw:
                 case WorkMode.Dump:
-                    sb.AppendLine($"# Output Path: \"{o_outputFolder}\"");
                     if (o_workMode.Value != WorkMode.Export)
                     {
                         sb.AppendLine($"# Load All Assets: {f_loadAllAssets}");
@@ -1170,7 +1270,7 @@ namespace AssetStudioCLI.Options
                     sb.AppendLine($"# Export Asset List: {o_exportAssetList}");
                     sb.AppendLine(ShowCurrentFilter());
                     sb.AppendLine($"# Assembly Path: \"{o_assemblyPath}\"");
-                    sb.AppendLine($"# Unity Version: \"{o_unityVersion}\"");
+                    sb.AppendLine($"# Unity Version: {unityVer}");
                     if (o_workMode.Value == WorkMode.Export)
                     {
                         sb.AppendLine($"# Max Parallel Export Tasks: {o_maxParallelExportTasks}");
@@ -1184,11 +1284,10 @@ namespace AssetStudioCLI.Options
                     sb.AppendLine($"# Log Output: {o_logOutput}");
                     sb.AppendLine($"# Export Asset List: {o_exportAssetList}");
                     sb.AppendLine(ShowCurrentFilter());
-                    sb.AppendLine($"# Unity Version: \"{o_unityVersion}\"");
+                    sb.AppendLine($"# Unity Version: {unityVer}");
                     break;
                 case WorkMode.Live2D:
                 case WorkMode.SplitObjects:
-                    sb.AppendLine($"# Output Path: \"{o_outputFolder}\"");
                     sb.AppendLine($"# Log Level: {o_logLevel}");
                     sb.AppendLine($"# Log Output: {o_logOutput}");
                     sb.AppendLine($"# Export Asset List: {o_exportAssetList}");
@@ -1196,14 +1295,19 @@ namespace AssetStudioCLI.Options
                     {
                         sb.AppendLine($"# Export Image Format: {o_imageFormat}");
                         sb.AppendLine($"# Filter by Name(s): \"{string.Join("\", \"", o_filterByName.Value)}\"");
+                        sb.AppendLine($"# FBX Scale Factor: {o_fbxScaleFactor}");
+                        sb.AppendLine($"# FBX Bone Size: {o_fbxBoneSize}");
+                        sb.AppendLine($"# FBX UVs as Diffuse Maps: {f_fbxUvsAsDiffuseMaps}");
                     }
                     else
                     {
-                        sb.AppendLine($"# Live2D Motion Export Method: {o_l2dMotionMode}");
+                        sb.AppendLine($"# Model Group Option: {o_l2dGroupOption}");
+                        sb.AppendFormat("# Search Model-related Assets by: {0}\n", f_l2dAssetSearchByFilename.Value ? "FileName" : "Container");
+                        sb.AppendLine($"# Motion Export Method: {o_l2dMotionMode}");
                         sb.AppendLine($"# Force Bezier: {f_l2dForceBezier }");
                         sb.AppendLine($"# Assembly Path: \"{o_assemblyPath}\"");
                     }
-                    sb.AppendLine($"# Unity Version: \"{o_unityVersion}\"");
+                    sb.AppendLine($"# Unity Version: {unityVer}");
                     break;
             }
             sb.AppendLine("======");

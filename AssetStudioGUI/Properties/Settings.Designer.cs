@@ -12,7 +12,7 @@ namespace AssetStudioGUI.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "17.9.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "17.13.0.0")]
     internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase {
         
         private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
@@ -122,156 +122,12 @@ namespace AssetStudioGUI.Properties {
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("True")]
-        public bool eulerFilter {
-            get {
-                return ((bool)(this["eulerFilter"]));
-            }
-            set {
-                this["eulerFilter"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0.25")]
-        public decimal filterPrecision {
-            get {
-                return ((decimal)(this["filterPrecision"]));
-            }
-            set {
-                this["filterPrecision"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("True")]
-        public bool exportAllNodes {
-            get {
-                return ((bool)(this["exportAllNodes"]));
-            }
-            set {
-                this["exportAllNodes"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("True")]
-        public bool exportSkins {
-            get {
-                return ((bool)(this["exportSkins"]));
-            }
-            set {
-                this["exportSkins"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("True")]
-        public bool exportAnimations {
-            get {
-                return ((bool)(this["exportAnimations"]));
-            }
-            set {
-                this["exportAnimations"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("10")]
-        public decimal boneSize {
-            get {
-                return ((decimal)(this["boneSize"]));
-            }
-            set {
-                this["boneSize"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("3")]
-        public int fbxVersion {
-            get {
-                return ((int)(this["fbxVersion"]));
-            }
-            set {
-                this["fbxVersion"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
-        public int fbxFormat {
-            get {
-                return ((int)(this["fbxFormat"]));
-            }
-            set {
-                this["fbxFormat"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("1")]
-        public decimal scaleFactor {
-            get {
-                return ((decimal)(this["scaleFactor"]));
-            }
-            set {
-                this["scaleFactor"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("True")]
-        public bool exportBlendShape {
-            get {
-                return ((bool)(this["exportBlendShape"]));
-            }
-            set {
-                this["exportBlendShape"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool castToBone {
-            get {
-                return ((bool)(this["castToBone"]));
-            }
-            set {
-                this["castToBone"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("True")]
         public bool restoreExtensionName {
             get {
                 return ((bool)(this["restoreExtensionName"]));
             }
             set {
                 this["restoreExtensionName"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool exportAllUvsAsDiffuseMaps {
-            get {
-                return ((bool)(this["exportAllUvsAsDiffuseMaps"]));
-            }
-            set {
-                this["exportAllUvsAsDiffuseMaps"] = value;
             }
         }
         
@@ -392,6 +248,78 @@ namespace AssetStudioGUI.Properties {
             }
             set {
                 this["useTypetreeLoading"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("Light")]
+        public global::AssetStudioGUI.GuiColorTheme guiColorTheme {
+            get {
+                return ((global::AssetStudioGUI.GuiColorTheme)(this["guiColorTheme"]));
+            }
+            set {
+                this["guiColorTheme"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("ContainerPath")]
+        public global::CubismLive2DExtractor.Live2DModelGroupOption l2dModelGroupOption {
+            get {
+                return ((global::CubismLive2DExtractor.Live2DModelGroupOption)(this["l2dModelGroupOption"]));
+            }
+            set {
+                this["l2dModelGroupOption"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool l2dAssetSearchByFilename {
+            get {
+                return ((bool)(this["l2dAssetSearchByFilename"]));
+            }
+            set {
+                this["l2dAssetSearchByFilename"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool useDumpTreeView {
+            get {
+                return ((bool)(this["useDumpTreeView"]));
+            }
+            set {
+                this["useDumpTreeView"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool autoplayAudio {
+            get {
+                return ((bool)(this["autoplayAudio"]));
+            }
+            set {
+                this["autoplayAudio"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string fbxSettings {
+            get {
+                return ((string)(this["fbxSettings"]));
+            }
+            set {
+                this["fbxSettings"] = value;
             }
         }
     }

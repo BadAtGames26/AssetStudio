@@ -34,18 +34,22 @@ namespace AssetStudioGUI
     partial class AssetStudioGUIForm : Form
     {
         private AssetItem lastSelectedItem;
+        private AssetItem lastPreviewItem;
         private DirectBitmap imageTexture;
         private string tempClipboard;
+        private bool isDarkMode;
 
+        #region FMODControl
         private FMOD.System system;
         private FMOD.Sound sound;
         private FMOD.Channel channel;
-        private FMOD.SoundGroup masterSoundGroup;
         private FMOD.MODE loopMode = FMOD.MODE.LOOP_OFF;
+        private byte[] soundBuff;
         private uint FMODlenms;
         private uint FMODloopstartms;
         private uint FMODloopendms;
         private float FMODVolume = 0.8f;
+        #endregion
 
         #region SpriteControl
         private SpriteMaskMode spriteMaskVisibleMode = SpriteMaskMode.On;
@@ -118,13 +122,14 @@ namespace AssetStudioGUI
         [DllImport("gdi32.dll")]
         private static extern IntPtr AddFontMemResourceEx(IntPtr pbFont, uint cbFont, IntPtr pdv, [In] ref uint pcFonts);
 
-        private string guiTitle = string.Empty;
+        private string guiTitle;
 
         public AssetStudioGUIForm()
         {
             Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
             ConsoleWindow.RunConsole(Properties.Settings.Default.showConsole);
             InitializeComponent();
+            ApplyColorTheme(out isDarkMode);
 
             var appAssembly = typeof(Program).Assembly.GetName();
             guiTitle = $"{appAssembly.Name} v{appAssembly.Version}";
@@ -138,8 +143,14 @@ namespace AssetStudioGUI
             showConsoleToolStripMenuItem.Checked = Properties.Settings.Default.showConsole;
             buildTreeStructureToolStripMenuItem.Checked = Properties.Settings.Default.buildTreeStructure;
             useAssetLoadingViaTypetreeToolStripMenuItem.Checked = Properties.Settings.Default.useTypetreeLoading;
+            useDumpTreeViewToolStripMenuItem.Checked = Properties.Settings.Default.useDumpTreeView;
+            autoPlayAudioAssetsToolStripMenuItem.Checked = Properties.Settings.Default.autoplayAudio;
             FMODinit();
             listSearchFilterMode.SelectedIndex = 0;
+            if (string.IsNullOrEmpty(Properties.Settings.Default.fbxSettings))
+            {
+                FBXinitOptions();
+            }
 
             logger = new GUILogger(StatusStripUpdate);
             Logger.Default = logger;
@@ -262,11 +273,15 @@ namespace AssetStudioGUI
                 return;
             }
 
-            var (productName, treeNodeCollection) = await Task.Run(() => BuildAssetData());
-            var typeMap = await Task.Run(() => BuildClassStructure());
+            var (productName, treeNodeCollection) = await Task.Run(BuildAssetData);
+            var typeMap = await Task.Run(BuildClassStructure);
             productName = string.IsNullOrEmpty(productName) ? "no productName" : productName;
+            if (isDarkMode)
+                Progress.Reset();
 
-            Text = $"{guiTitle} - {productName} - {assetsManager.assetsFileList[0].version} - {assetsManager.assetsFileList[0].m_TargetPlatform}";
+            var serializedFile = assetsManager.assetsFileList[0];
+            var tuanjieString = serializedFile.version.IsTuanjie ? " - Tuanjie Engine" : "";
+            Text = $"{guiTitle} - {productName} - {serializedFile.version} - {serializedFile.targetPlatformString}{tuanjieString}";
 
             assetListView.VirtualListSize = visibleAssets.Count;
 
@@ -292,7 +307,7 @@ namespace AssetStudioGUI
 
             var types = new SortedSet<string>();
             types.UnionWith(exportableAssets.Select(x => x.TypeString));
-            if (Studio.cubismMocList.Count > 0)
+            if (Studio.l2dModelDict.Count > 0)
             {
                 types.Add("MonoBehaviour (Live2D Model)");
             }
@@ -774,7 +789,7 @@ namespace AssetStudioGUI
                     var at = a.SubItems[sortColumn].Text.AsSpan();
                     var bt = b.SubItems[sortColumn].Text.AsSpan();
 
-                    return reverseSort ? MemoryExtensions.CompareTo(bt, at, StringComparison.OrdinalIgnoreCase) : MemoryExtensions.CompareTo(at, bt, StringComparison.OrdinalIgnoreCase);
+                    return reverseSort ? bt.CompareTo(at, StringComparison.OrdinalIgnoreCase) : at.CompareTo(bt, StringComparison.OrdinalIgnoreCase);
                 });
             }
             assetListView.EndUpdate();
@@ -797,21 +812,43 @@ namespace AssetStudioGUI
 
             lastSelectedItem = (AssetItem)e.Item;
 
-            if (e.IsSelected)
+            if (!e.IsSelected) 
+                return;
+            
+            switch (tabControl2.SelectedIndex)
             {
-                if (tabControl2.SelectedIndex == 1)
-                {
-                    dumpTextBox.Text = DumpAsset(lastSelectedItem.Asset);
-                }
-                if (enablePreview.Checked)
-                {
-                    PreviewAsset(lastSelectedItem);
-                    if (displayInfo.Checked && lastSelectedItem.InfoText != null)
+                case 0: //Preview
+                    if (enablePreview.Checked)
                     {
-                        assetInfoLabel.Text = lastSelectedItem.InfoText;
-                        assetInfoLabel.Visible = true;
+                        PreviewAsset(lastSelectedItem);
+                        if (displayInfo.Checked && lastSelectedItem.InfoText != null)
+                        {
+                            assetInfoLabel.Text = lastSelectedItem.InfoText;
+                            assetInfoLabel.Visible = true;
+                        }
                     }
+                    break;
+                case 1: //Dump
+                    DumpAsset(lastSelectedItem);
+                    break;
+            }
+        }
+
+        private void DumpAsset(AssetItem assetItem)
+        {
+            if (assetItem == null)
+                return;
+
+            if (useDumpTreeViewToolStripMenuItem.Checked)
+            {
+                using (var jsonDoc = DumpAssetToJsonDoc(assetItem.Asset))
+                {
+                    dumpTreeView.LoadFromJson(jsonDoc, assetItem.Text);
                 }
+            }
+            else
+            {
+                dumpTextBox.Text = Studio.DumpAsset(assetItem.Asset);
             }
         }
 
@@ -828,6 +865,7 @@ namespace AssetStudioGUI
             if (e.IsSelected)
             {
                 classTextBox.Text = ((TypeTreeItem)classesListView.SelectedItems[0]).ToString();
+                lastSelectedItem = null;
             }
         }
 
@@ -842,6 +880,7 @@ namespace AssetStudioGUI
 
         private void PreviewAsset(AssetItem assetItem)
         {
+            lastPreviewItem = assetItem;
             if (assetItem == null)
                 return;
             try
@@ -1071,17 +1110,16 @@ namespace AssetStudioGUI
                         break;
                 }
             }
-
-            var m_AudioData = m_AudioClip.m_AudioData.GetData();
-            if (m_AudioData == null || m_AudioData.Length == 0)
+            soundBuff = BigArrayPool<byte>.Shared.Rent(m_AudioClip.m_AudioData.Size);
+            m_AudioClip.m_AudioData.GetData(soundBuff, out var read);
+            if (read <= 0)
                 return;
 
             var exinfo = new FMOD.CREATESOUNDEXINFO();
-
             exinfo.cbsize = Marshal.SizeOf(exinfo);
             exinfo.length = (uint)m_AudioClip.m_Size;
 
-            var result = system.createSound(m_AudioData, FMOD.MODE.OPENMEMORY | loopMode, ref exinfo, out sound);
+            var result = system.createStream(soundBuff, FMOD.MODE.OPENMEMORY | FMOD.MODE.LOWMEM | FMOD.MODE.IGNORETAGS | FMOD.MODE.ACCURATETIME | loopMode, ref exinfo, out sound);
             if (result != FMOD.RESULT.OK)
             {
                 if (m_AudioClip.version < (2, 6) || m_AudioClip.version >= 5)
@@ -1102,13 +1140,15 @@ namespace AssetStudioGUI
                         channels +
                         bits;
                 }
-                StatusStripUpdate("Preview not available: Unsupported fmod audio format. Try to export instead.");
+                var errorMsg = result == FMOD.RESULT.ERR_VERSION
+                    ? "Unsupported version of fmod sound. Try to export raw and convert with an external tool instead."
+                    : $"Preview not available, try to export instead. {FMOD.Error.String(result)}";
+                StatusStripUpdate(errorMsg);
                 FMODreset();
                 return;
             }
 
             sound.getNumSubSounds(out var numsubsounds);
-
             if (numsubsounds > 0)
             {
                 result = sound.getSubSound(0, out var subsound);
@@ -1127,10 +1167,12 @@ namespace AssetStudioGUI
                 assetItem.InfoText += $"\nLoop Start: {(FMODloopstartms / 1000 / 60):00}:{(FMODloopstartms / 1000 % 60):00}.{(FMODloopstartms / 10 % 100):00}";
                 assetItem.InfoText += $"\nLoop End: {(FMODloopendms / 1000 / 60):00}:{(FMODloopendms / 1000 % 60):00}.{(FMODloopendms / 10 % 100):00}";
             }
-            
+
+            var paused = !autoPlayAudioAssetsToolStripMenuItem.Checked;
             _ = system.getMasterChannelGroup(out var channelGroup);
-            result = system.playSound(sound, channelGroup, true, out channel);
+            result = system.playSound(sound, channelGroup, paused, out channel);
             if (ERRCHECK(result)) return;
+            if (!paused) { timer.Start(); }
 
             FMODpanel.Visible = true;
 
@@ -1139,6 +1181,20 @@ namespace AssetStudioGUI
 
             FMODinfoLabel.Text = frequency + " Hz";
             FMODtimerLabel.Text = $"00:00.00 / {(FMODlenms / 1000 / 60):00}:{(FMODlenms / 1000 % 60):00}.{(FMODlenms / 10 % 100):00}";
+            
+            sound.getFormat(out _, out _, out var audioChannels, out _);
+            switch (audioChannels)
+            {
+                case 1:
+                    FMODaudioChannelsLabel.Text = "Mono";
+                    break;
+                case 2:
+                    FMODaudioChannelsLabel.Text = "Stereo";
+                    break;
+                default:
+                    FMODaudioChannelsLabel.Text = $"{audioChannels}-Channel";
+                    break;
+            }
         }
 
         private void PreviewVideoClip(AssetItem assetItem, VideoClip m_VideoClip)
@@ -1180,19 +1236,23 @@ namespace AssetStudioGUI
 
         private void PreviewMoc(AssetItem assetItem, MonoBehaviour m_MonoBehaviour)
         {
-            using (var cubismModel = new CubismModel(m_MonoBehaviour))
+            using (var cubismMoc = new CubismMoc(m_MonoBehaviour))
             {
                 var sb = new StringBuilder();
-                sb.AppendLine($"SDK Version: {cubismModel.VersionDescription}");
-                if (cubismModel.Version > 0)
+                if (Studio.l2dModelDict.TryGetValue(m_MonoBehaviour, out var model) && model != null)
                 {
-                    sb.AppendLine($"Canvas Width: {cubismModel.CanvasWidth}");
-                    sb.AppendLine($"Canvas Height: {cubismModel.CanvasHeight}");
-                    sb.AppendLine($"Center X: {cubismModel.CentralPosX}");
-                    sb.AppendLine($"Center Y: {cubismModel.CentralPosY}");
-                    sb.AppendLine($"Pixel Per Unit: {cubismModel.PixelPerUnit}");
-                    sb.AppendLine($"Parameter Count: {cubismModel.ParamCount}");
-                    sb.AppendLine($"Part Count: {cubismModel.PartCount}");
+                    sb.AppendLine($"Model Name: {model.Name}");
+                }
+                sb.AppendLine($"SDK Version: {cubismMoc.VersionDescription}");
+                if (cubismMoc.Version > 0)
+                {
+                    sb.AppendLine($"Canvas Width: {cubismMoc.CanvasWidth}");
+                    sb.AppendLine($"Canvas Height: {cubismMoc.CanvasHeight}");
+                    sb.AppendLine($"Center X: {cubismMoc.CentralPosX}");
+                    sb.AppendLine($"Center Y: {cubismMoc.CentralPosY}");
+                    sb.AppendLine($"Pixel Per Unit: {cubismMoc.PixelPerUnit}");
+                    sb.AppendLine($"Parameter Count: {cubismMoc.ParamCount}");
+                    sb.AppendLine($"Part Count: {cubismMoc.PartCount}");
                 }
                 assetItem.InfoText = sb.ToString();
             }
@@ -1253,7 +1313,7 @@ namespace AssetStudioGUI
         {
             if (m_Mesh.m_VertexCount > 0)
             {
-                viewMatrixData = Matrix4.CreateRotationY(-(float)Math.PI / 4) * Matrix4.CreateRotationX(-(float)Math.PI / 6);
+                viewMatrixData = Matrix4.CreateRotationY(-MathF.PI / 4) * Matrix4.CreateRotationX(-MathF.PI / 6);
                 #region Vertices
                 if (m_Mesh.m_Vertices == null || m_Mesh.m_Vertices.Length == 0)
                 {
@@ -1479,10 +1539,11 @@ namespace AssetStudioGUI
         private void ResetForm()
         {
             Text = guiTitle;
-            assetsManager.Clear();
-            assemblyLoader.Clear();
-            exportableAssets.Clear();
-            visibleAssets.Clear();
+            Studio.assetsManager.Clear();
+            Studio.assemblyLoader.Clear();
+            Studio.exportableAssets.Clear();
+            Studio.visibleAssets.Clear();
+            Studio.l2dModelDict.Clear();
             sceneTreeView.Nodes.Clear();
             assetListView.VirtualListSize = 0;
             assetListView.Items.Clear();
@@ -1490,7 +1551,6 @@ namespace AssetStudioGUI
             classesListView.Groups.Clear();
             selectedAnimationAssetsList.Clear();
             selectedIndicesPrevList.Clear();
-            cubismMocList.Clear();
             previewPanel.Image = Properties.Resources.preview;
             previewPanel.SizeMode = PictureBoxSizeMode.CenterImage;
             imageTexture?.Dispose();
@@ -1522,9 +1582,22 @@ namespace AssetStudioGUI
 
         private void tabControl2_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (tabControl2.SelectedIndex == 1 && lastSelectedItem != null)
+            switch (tabControl2.SelectedIndex)
             {
-                dumpTextBox.Text = DumpAsset(lastSelectedItem.Asset);
+                case 0: //Preview
+                    if (lastPreviewItem != lastSelectedItem)
+                    {
+                        PreviewAsset(lastSelectedItem);
+                        if (displayInfo.Checked && lastSelectedItem?.InfoText != null)
+                        {
+                            assetInfoLabel.Text = lastSelectedItem.InfoText;
+                            assetInfoLabel.Visible = true;
+                        }
+                    }
+                    break;
+                case 1: //Dump
+                    DumpAsset(lastSelectedItem);
+                    break;
             }
         }
 
@@ -1555,7 +1628,7 @@ namespace AssetStudioGUI
                         switch (asset.Asset)
                         {
                             case MonoBehaviour m_MonoBehaviour:
-                                if (Studio.cubismMocList.Count > 0 && m_MonoBehaviour.m_Script.TryGet(out var m_Script))
+                                if (Studio.l2dModelDict.Count > 0 && m_MonoBehaviour.m_Script.TryGet(out var m_Script))
                                 {
                                     if (m_Script.m_ClassName == "CubismMoc")
                                     {
@@ -1891,7 +1964,7 @@ namespace AssetStudioGUI
                     }
                 }
                 visibleAssets = filterMoc
-                    ? exportableAssets.FindAll(x => cubismMocList.Contains(x.Asset) || show.Contains(x.Type))
+                    ? exportableAssets.FindAll(x => (x.Asset is MonoBehaviour monoBehaviour && l2dModelDict.ContainsKey(monoBehaviour)) || show.Contains(x.Type))
                     : exportableAssets.FindAll(x => show.Contains(x.Type));
             }
             else
@@ -1908,12 +1981,14 @@ namespace AssetStudioGUI
                             x.Text.IndexOf(listSearch.Text, StringComparison.OrdinalIgnoreCase) >= 0
                             || x.SubItems[1].Text.IndexOf(listSearch.Text, StringComparison.OrdinalIgnoreCase) >= 0
                             || x.SubItems[3].Text.IndexOf(listSearch.Text, StringComparison.OrdinalIgnoreCase) >= 0);
+                        listSearch.ForeColor = SystemColors.WindowText;
                         break;
                     case ListSearchFilterMode.Exclude:
                         visibleAssets = visibleAssets.FindAll(x =>
                             x.Text.IndexOf(listSearch.Text, StringComparison.OrdinalIgnoreCase) <= 0
                             && x.SubItems[1].Text.IndexOf(listSearch.Text, StringComparison.OrdinalIgnoreCase) <= 0
                             && x.SubItems[3].Text.IndexOf(listSearch.Text, StringComparison.OrdinalIgnoreCase) <= 0);
+                        listSearch.ForeColor = SystemColors.WindowText;
                         break;
                     case ListSearchFilterMode.RegexName:
                     case ListSearchFilterMode.RegexContainer:
@@ -1931,15 +2006,18 @@ namespace AssetStudioGUI
                                 visibleAssets = visibleAssets.FindAll(x => Regex.IsMatch(x.SubItems[1].Text, pattern, regexOptions));
                             }
                             listSearch.BackColor = SystemInformation.HighContrast ? listSearch.BackColor : System.Drawing.Color.PaleGreen;
+                            listSearch.ForeColor = isDarkMode ? System.Drawing.Color.Black : listSearch.ForeColor;
                         }
                         catch (ArgumentException e)
                         {
                             listSearch.BackColor = SystemInformation.HighContrast ? listSearch.BackColor : System.Drawing.Color.FromArgb(255, 160, 160);
+                            listSearch.ForeColor = isDarkMode ? System.Drawing.Color.Black : listSearch.ForeColor;
                             StatusStripUpdate($"Regex error: {e.Message}");
                         }
                         catch (RegexMatchTimeoutException)
                         {
                             listSearch.BackColor = SystemInformation.HighContrast ? listSearch.BackColor : System.Drawing.Color.FromArgb(255, 160, 160);
+                            listSearch.ForeColor = isDarkMode ? System.Drawing.Color.Black : listSearch.ForeColor;
                             StatusStripUpdate($"Timeout error");
                         }
                         break;
@@ -2037,7 +2115,7 @@ namespace AssetStudioGUI
             if (e.Button == MouseButtons.Right)
             {
                 sceneTreeView.SelectedNode = e.Node;
-                contextMenuStrip2.Show(sceneTreeView, e.Location.X, e.Location.Y);
+                sceneContextMenuStrip.Show(sceneTreeView, e.Location.X, e.Location.Y);
             }
         }
 
@@ -2152,7 +2230,7 @@ namespace AssetStudioGUI
         {
             var selectedNode = sceneTreeView.SelectedNode;
             var relatedAssets = visibleAssets.FindAll(x => x.TreeNode == selectedNode);
-            showRelatedAssetsToolStripMenuItem.DropDownItems.Clear();
+            shShowRelatedAssetsToolStripMenuItem.DropDownItems.Clear();
             if (relatedAssets.Count > 1)
             {
                 var assetItem = new ToolStripMenuItem
@@ -2163,7 +2241,7 @@ namespace AssetStudioGUI
                     Text = "Select all"
                 };
                 assetItem.Click += selectAllRelatedAssets;
-                showRelatedAssetsToolStripMenuItem.DropDownItems.Add(assetItem);
+                shShowRelatedAssetsToolStripMenuItem.DropDownItems.Add(assetItem);
             }
             foreach (var asset in relatedAssets)
             {
@@ -2176,7 +2254,7 @@ namespace AssetStudioGUI
                     Text = $"({asset.TypeString}) {asset.Text}"
                 };
                 assetItem.Click += selectRelatedAsset;
-                showRelatedAssetsToolStripMenuItem.DropDownItems.Add(assetItem);
+                shShowRelatedAssetsToolStripMenuItem.DropDownItems.Add(assetItem);
             }
         }
 
@@ -2216,7 +2294,7 @@ namespace AssetStudioGUI
         {
             if (exportableAssets.Count > 0)
             {
-                if (Studio.cubismMocList.Count == 0)
+                if (Studio.l2dModelDict.Count == 0)
                 {
                     Logger.Info("Live2D Cubism models were not found.");
                     return;
@@ -2251,12 +2329,12 @@ namespace AssetStudioGUI
 
         private void ExportSelectedL2DModels(ExportL2DFilter l2dExportMode)
         {
-            if (exportableAssets.Count == 0)
+            if (Studio.exportableAssets.Count == 0)
             {
                 Logger.Info("No exportable assets loaded");
                 return;
             }
-            if (Studio.cubismMocList.Count == 0)
+            if (Studio.l2dModelDict.Count == 0)
             {
                 Logger.Info("Live2D Cubism models were not found.");
                 return;
@@ -2364,6 +2442,159 @@ namespace AssetStudioGUI
             Properties.Settings.Default.Save();
         }
 
+        private void ApplyColorTheme(out bool isDarkMode)
+        {
+            isDarkMode = false;
+            if (SystemInformation.HighContrast)
+                return;
+
+#if NET9_0_OR_GREATER
+#pragma warning disable WFO5001 //for evaluation purposes only
+            var currentTheme = Properties.Settings.Default.guiColorTheme;
+            colorThemeToolStripMenu.Visible = true;
+            try
+            {
+                switch (currentTheme)
+                {
+                    case GuiColorTheme.System:
+                        Application.SetColorMode(SystemColorMode.System);
+                        colorThemeAutoToolStripMenuItem.Checked = true;
+                        isDarkMode = Application.IsDarkModeEnabled;
+                        break;
+                    case GuiColorTheme.Light:
+                        colorThemeLightToolStripMenuItem.Checked = true;
+                        break;
+                    case GuiColorTheme.Dark:
+                        Application.SetColorMode(SystemColorMode.Dark);
+                        colorThemeDarkToolStripMenuItem.Checked = true;
+                        isDarkMode = true;
+                        break;
+                }
+            }
+            catch (Exception)
+            {
+                //skip
+            }
+#pragma warning restore WFO5001
+#endif
+            if (isDarkMode)
+            {
+                assetListView.GridLines = false;
+            }
+            else
+            {
+                FMODloopButton.UseVisualStyleBackColor = true;
+            }
+        }
+
+        private void colorThemeAutoToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!colorThemeAutoToolStripMenuItem.Checked)
+            {
+                colorThemeAutoToolStripMenuItem.Checked = true;
+                colorThemeLightToolStripMenuItem.Checked = false;
+                colorThemeDarkToolStripMenuItem.Checked = false;
+                Properties.Settings.Default.guiColorTheme = GuiColorTheme.System;
+                Properties.Settings.Default.Save();
+                ShowThemeChangingMsg();
+            }
+        }
+
+        private void colorThemeLightToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!colorThemeLightToolStripMenuItem.Checked)
+            {
+                colorThemeAutoToolStripMenuItem.Checked = false;
+                colorThemeLightToolStripMenuItem.Checked = true;
+                colorThemeDarkToolStripMenuItem.Checked = false;
+                Properties.Settings.Default.guiColorTheme = GuiColorTheme.Light;
+                Properties.Settings.Default.Save();
+                ShowThemeChangingMsg();
+            }
+        }
+
+        private void colorThemeDarkToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!colorThemeDarkToolStripMenuItem.Checked)
+            {
+                colorThemeAutoToolStripMenuItem.Checked = false;
+                colorThemeLightToolStripMenuItem.Checked = false;
+                colorThemeDarkToolStripMenuItem.Checked = true;
+                Properties.Settings.Default.guiColorTheme = GuiColorTheme.Dark;
+                Properties.Settings.Default.Save();
+                ShowThemeChangingMsg();
+            }
+        }
+
+        private static void ShowThemeChangingMsg()
+        {
+            var msg = "Color theme will be changed after restarting the application.\n\n" +
+                      "Dark theme support for WinForms is not yet fully implemented and is for evaluation purposes only.\n" +
+                      "Better Dark theme support should be added in future .NET versions.";
+            MessageBox.Show(msg, "Info", MessageBoxButtons.OK);
+        }
+
+        private void DumpTreeView_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                dumpTreeView.SelectedNode = e.Node;
+                tempClipboard = string.IsNullOrEmpty((string)e.Node.Tag)
+                    ? e.Node.Text
+                    : $"{e.Node.Name}: {e.Node.Tag}";
+                dumpTreeViewContextMenuStrip.Show(dumpTreeView, e.Location.X, e.Location.Y);
+            }
+        }
+
+        private void copyToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            Clipboard.SetDataObject(tempClipboard);
+        }
+
+        private void expandAllToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            dumpTreeView.BeginUpdate();
+            foreach (TreeNode node in dumpTreeView.Nodes)
+            {
+                node.ExpandAll();
+            }
+            dumpTreeView.EndUpdate();
+        }
+
+        private void collapseAllToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            dumpTreeView.BeginUpdate();
+            foreach (TreeNode node in dumpTreeView.Nodes)
+            {
+                node.Collapse(ignoreChildren: false);
+            }
+            dumpTreeView.EndUpdate();
+        }
+
+        private void useDumpTreeViewToolStripMenuItem_CheckedChanged(object sender, EventArgs e)
+        {
+            var isTreeViewEnabled = useDumpTreeViewToolStripMenuItem.Checked;
+            dumpTreeView.Visible = isTreeViewEnabled;
+            Properties.Settings.Default.useDumpTreeView = isTreeViewEnabled;
+            Properties.Settings.Default.Save();
+            if (tabControl2.SelectedIndex == 1)
+            {
+                DumpAsset(lastSelectedItem);
+            }
+        }
+
+        private void autoPlayAudioAssetsToolStripMenuItem_CheckedChanged(object sender, EventArgs e)
+        {
+            Properties.Settings.Default.autoplayAudio = autoPlayAudioAssetsToolStripMenuItem.Checked;
+            Properties.Settings.Default.Save();
+        }
+
+        private void FBXinitOptions()
+        {
+            Properties.Settings.Default.fbxSettings = new Fbx.Settings().ToBase64();
+            Properties.Settings.Default.Save();
+        }
+
         #region FMOD
         private void FMODinit()
         {
@@ -2383,10 +2614,8 @@ namespace AssetStudioGUI
             result = system.init(2, FMOD.INITFLAGS.NORMAL, IntPtr.Zero);
             if (ERRCHECK(result)) { return; }
 
-            result = system.getMasterSoundGroup(out masterSoundGroup);
-            if (ERRCHECK(result)) { return; }
-
-            result = masterSoundGroup.setVolume(FMODVolume);
+            _ = system.getMasterChannelGroup(out var channelGroup);
+            result = channelGroup.setVolume(FMODVolume);
             if (ERRCHECK(result)) { return; }
         }
 
@@ -2396,13 +2625,28 @@ namespace AssetStudioGUI
             FMODprogressBar.Value = 0;
             FMODtimerLabel.Text = "00:00.00 / 00:00.00";
             FMODstatusLabel.Text = "Stopped";
+            FMODpauseButton.Text = "Pause";
             FMODinfoLabel.Text = "";
+            FMODaudioChannelsLabel.Text = "";
 
             if (sound.hasHandle())
             {
-                var result = sound.release();
+                FMOD.RESULT result;
+                sound.getSubSoundParent(out var parentsound);
+                result = sound.release();
                 ERRCHECK(result);
                 sound.clearHandle();
+                if (parentsound.hasHandle())
+                {
+                    result = parentsound.release();
+                    ERRCHECK(result);
+                    parentsound.clearHandle();
+                }
+            }
+            if (soundBuff != null)
+            {
+                BigArrayPool<byte>.Shared.Return(soundBuff, clearArray: true);
+                soundBuff = null;
             }
         }
 
@@ -2443,7 +2687,6 @@ namespace AssetStudioGUI
                         {
                             if (ERRCHECK(result)) { return; }
                         }
-
                     }
                 }
             }
@@ -2536,16 +2779,20 @@ namespace AssetStudioGUI
                 if (playing || paused)
                 {
                     result = channel.setMode(loopMode);
-                    if (ERRCHECK(result)) { return; }
+                    if ((result != FMOD.RESULT.OK) && (result != FMOD.RESULT.ERR_INVALID_HANDLE))
+                    {
+                        if (ERRCHECK(result)) { return; }
+                    }
                 }
             }
         }
 
         private void FMODvolumeBar_ValueChanged(object sender, EventArgs e)
         {
-            FMODVolume = Convert.ToSingle(FMODvolumeBar.Value) / 10;
+            FMODVolume = FMODvolumeBar.Value / 10f;
 
-            var result = masterSoundGroup.setVolume(FMODVolume);
+            _ = system.getMasterChannelGroup(out var channelGroup);
+            var result = channelGroup.setVolume(FMODVolume);
             if (ERRCHECK(result)) { return; }
         }
 
@@ -2574,7 +2821,6 @@ namespace AssetStudioGUI
                 {
                     if (ERRCHECK(result)) { return; }
                 }
-
 
                 result = channel.isPlaying(out var playing);
                 if ((result != FMOD.RESULT.OK) && (result != FMOD.RESULT.ERR_INVALID_HANDLE))
@@ -2610,6 +2856,12 @@ namespace AssetStudioGUI
                 if ((result != FMOD.RESULT.OK) && (result != FMOD.RESULT.ERR_INVALID_HANDLE))
                 {
                     ERRCHECK(result);
+                }
+
+                if (!playing)
+                {
+                    timer.Stop();
+                    ms = 0;
                 }
             }
 
